@@ -10,15 +10,15 @@ from .team import Team
 from .player import Player
 from .matchup import Matchup
 from .box_score import BoxScore
-from .constant import PRO_TEAM_MAP
-from.activity import Activity
-from .constant import POSITION_MAP, ACTIVITY_MAP
+from .activity import Activity
+from .constant import *
+from .roster import Roster
 
 class League(BaseLeague):
     '''Creates a League instance for Public/Private ESPN league'''
     def __init__(self, league_id: int, year: int, espn_s2=None, swid=None, username=None, password=None, debug=False):
         super().__init__(league_id=league_id, year=year, sport='nba', espn_s2=espn_s2, swid=swid, username=username, password=password, debug=debug)
-            
+
         data = self._fetch_league()
         self._fetch_teams(data)
 
@@ -26,7 +26,8 @@ class League(BaseLeague):
         data = super()._fetch_league()
         self.start_date = datetime.datetime.fromtimestamp(min([i[1][1]/1000 for i in self._get_pro_schedule(1).items()])).date()
         self._fetch_players()
-        self._map_matchup_ids(data['schedule'])
+        if self.settings.scoring_type != LEAGUE_TYPE_MAP['ROTO']:
+            self._map_matchup_ids(data['schedule'])
         return(data)
 
     def _map_matchup_ids(self, schedule):
@@ -42,7 +43,7 @@ class League(BaseLeague):
 
 
     def _fetch_teams(self, data):
-        '''Fetch teams in league'''        
+        '''Fetch teams in league'''
         super()._fetch_teams(data, TeamClass=Team)
 
         # replace opponentIds in schedule with team instances
@@ -54,15 +55,74 @@ class League(BaseLeague):
                         matchup.away_team = opponent
                     if matchup.home_team == opponent.team_id:
                         matchup.home_team = opponent
-                        
 
+    def _get_past_roster_data(self, scoringPeriod: int = None, refreshCached: bool = False):
+        if not scoringPeriod or scoringPeriod > self.latestScoringPeriod:
+            scoringPeriod = self.latestScoringPeriod
+        cached = True
+        for team in self.teams:
+            if scoringPeriod not in team.past_rosters:
+                cached = False
+        if not cached or refreshCached:
+            data = self.espn_request.get_roster_by_scoring_period(scoringPeriod)
+            teams = data['teams']
+            for team in teams:
+                self.get_team_by_id(team['id']).past_rosters.update({scoringPeriod: Roster(team['roster'])})
+
+    def get_scored_stats(self):
+        stats = []
+        for statItem in self.settings.scoring_items:
+            stats.append(STATS_MAP.get(statItem.get('statId')))
+        return stats
 
     def standings(self) -> List[Team]:
         standings = sorted(self.teams, key=lambda x: x.final_standing if x.final_standing != 0 else x.standing, reverse=False)
         return standings
 
+    def roto_scoreboard(self, scoringPeriod: int = None, includeUnscoredStats: bool = False):
+        '''Returns a roto league's scores for a given scoring period'''
+        self._get_past_roster_data(scoringPeriod)
+        posFilter = []
+        for slot in self.settings.lineup_slots:
+            if slot not in [12, 13] and slot not in posFilter:
+                posFilter.append(slot)
+        statFilter = []
+        if includeUnscoredStats:
+            for key, item in STATS_MAP.items():
+                if item != '':
+                    statFilter.append(key)
+        else:
+            for item in self.settings.scoring_items:
+                if item['statId'] in CALCULATED_STATS.keys():
+                    statFilter.extend(CALCULATED_STATS.get(item['statId']))
+                else:
+                    statFilter.append(item['statId'])
+        scores = {}
+        for team in self.teams:
+            statDefault = 0
+            totalActiveStats = dict.fromkeys(statFilter, statDefault)
+            totalInactiveStats = dict.fromkeys(statFilter, statDefault)
+            for entry in team.past_rosters.get(scoringPeriod).entries:
+                if entry['lineupSlotId'] in posFilter:
+                    for stat, val in entry['periodStats'].items():
+                        if stat in statFilter:
+                            totalActiveStats[stat] += val
+                else:
+                    for stat, val in entry['periodStats'].items():
+                        if stat in statFilter:
+                            totalInactiveStats[stat] += val
+            stats = {
+                'active': totalActiveStats,
+                'inactive': totalInactiveStats
+            }
+            scores.update({team.team_id: stats})
+        return scores
+
     def scoreboard(self, matchupPeriod: int = None) -> List[Matchup]:
         '''Returns list of matchups for a given matchup period'''
+        if self.settings.scoring_type == LEAGUE_TYPE_MAP['ROTO']:
+            raise Exception('Scoreboard function not valid for Roto Leagues')
+
         if not matchupPeriod:
             matchupPeriod=self.currentMatchupPeriod
 
@@ -79,10 +139,10 @@ class League(BaseLeague):
                     matchup.home_team = team
                 elif matchup.away_team == team.team_id:
                     matchup.away_team = team
-        
+
         return matchups
 
-    def get_team_data(self, team_id: int) -> Team:
+    def get_team_by_id(self, team_id: int) -> Team:
         for team in self.teams:
             if team_id == team.team_id:
                 return team
@@ -104,7 +164,7 @@ class League(BaseLeague):
         headers = {'x-fantasy-filter': json.dumps(filters)}
         data = self.espn_request.league_get(extend='/communication/', params=params, headers=headers)
         data = data['topics']
-        activity = [Activity(topic, self.player_map, self.get_team_data) for topic in data]
+        activity = [Activity(topic, self.player_map, self.get_team_by_id) for topic in data]
 
         return activity
 
@@ -116,14 +176,14 @@ class League(BaseLeague):
             raise Exception('Cant use free agents before 2019')
         if not week:
             week = self.current_week
-        
+
         slot_filter = []
         if position and position in POSITION_MAP:
             slot_filter = [POSITION_MAP[position]]
         if position_id:
             slot_filter.append(position_id)
 
-        
+
         params = {
             'view': 'kona_player_info',
             'scoringPeriodId': week,

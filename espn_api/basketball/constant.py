@@ -116,6 +116,13 @@ STATS_MAP = {
     '45': '',
     }
 
+CALCULATED_STATS = {
+    '19': ['13', '14'],
+    '20': ['15', '16'],
+    '21': ['17', '18'],
+    '28': ['40', '42']
+}
+
 ACTIVITY_MAP = {
     178: 'FA ADDED',
     180: 'WAIVER ADDED',
@@ -126,4 +133,10 @@ ACTIVITY_MAP = {
     'FA': 178,
     'WAIVER': 180,
     'TRADED': 244
+}
+
+#Other league types should be added in the future
+#This will require investigation to find the type string
+LEAGUE_TYPE_MAP = {
+    'ROTO': 'ROTO'
 }

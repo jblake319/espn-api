@@ -21,21 +21,22 @@ class Team(object):
         self.final_standing = data['rankCalculatedFinal']
         self.roster = []
         self.schedule = []
-        
+        self.past_rosters = {}
+
         if 'valuesByStat' in data:
             self.stats = {STATS_MAP[i]: j for i, j in data['valuesByStat'].items()}
         if member:
             self.owner = "%s %s" % (member['firstName'],
                                     member['lastName'])
-        if 'logo' in data:    
+        if 'logo' in data:
             self.logo_url = data['logo']
-        
+
         self._fetch_roster(roster)
         self._fetch_schedule(schedule)
-        
+
     def __repr__(self):
         return 'Team(%s)' % (self.team_name, )
-    
+
 
     def _fetch_roster(self, data):
         '''Fetch teams roster'''
@@ -58,6 +59,3 @@ class Team(object):
                     new_match = Matchup(match)
                     setattr(new_match, 'home_team', self)
                     self.schedule.append(new_match)
-                    
-        
-                    

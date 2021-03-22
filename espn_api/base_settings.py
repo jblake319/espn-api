@@ -12,6 +12,21 @@ class BaseSettings(object):
         if 'deadlineDate' in data['tradeSettings']:
             self.trade_deadline = data['tradeSettings']['deadlineDate']
         self.name = data['name']
+        self.scoring_type = data['scoringSettings']['scoringType']
+        self.lineup_slots = []
+        for slot, count in data.get('rosterSettings', {}).get('lineupSlotCounts', {}).items():
+            for _i in range(count):
+                self.lineup_slots.append(int(slot))
+        self.scoring_items = []
+        for item in data.get('scoringSettings').get('scoringItems'):
+            self.scoring_items.append({
+                'isReverseItem': bool(item.get('isReverseItem')),
+                'leagueRanking': item.get('leagueRanking'),
+                'leagueTotal': item.get('leagueTotal'),
+                'points': item.get('points'),
+                'pointsOverrides': item.get('pointsOverrides'),
+                'statId': str(item.get('statId'))
+            })
         self.tie_rule = data['scoringSettings']['matchupTieRule']
         self.playoff_seed_tie_rule = data['scoringSettings']['playoffMatchupTieRule']
         divisions = data.get('scheduleSettings', {}).get('divisions', [])

@@ -26,13 +26,13 @@ class EspnFantasyRequests(object):
         self.logger = logger
 
         self.LEAGUE_ENDPOINT = FANTASY_BASE_ENDPOINT + FANTASY_SPORTS[sport]
-        # older season data is stored at a different endpoint 
+        # older season data is stored at a different endpoint
         if year < 2018:
             self.LEAGUE_ENDPOINT += "/leagueHistory/" + str(league_id) + "?seasonId=" + str(year)
         else:
             self.LEAGUE_ENDPOINT += "/seasons/" + str(year) + "/segments/0/leagues/" + str(league_id)
-        
-    
+
+
     def league_get(self, params: dict = None, headers: dict = None, extend: str = ''):
         endpoint = self.LEAGUE_ENDPOINT + extend
         r = requests.get(endpoint, params=params, headers=headers, cookies=self.cookies)
@@ -41,7 +41,7 @@ class EspnFantasyRequests(object):
         if self.logger:
             self.logger.log_request(endpoint=endpoint, params=params, headers=headers, response=r.json())
         return r.json() if self.year > 2017 else r.json()[0]
-    
+
     def get(self, params: dict = None, headers: dict = None, extend: str = ''):
         endpoint = self.ENDPOINT + extend
         r = requests.get(endpoint, params=params, headers=headers, cookies=self.cookies)
@@ -54,11 +54,20 @@ class EspnFantasyRequests(object):
     def get_league(self):
         '''Gets all of the leagues initial data (teams, roster, matchups, settings)'''
         params = {
-            'view': ['mTeam', 'mRoster', 'mMatchup', 'mSettings'] 
+            'view': ['mTeam', 'mRoster', 'mMatchup', 'mSettings']
         }
         data = self.league_get(params=params)
         return data
-    
+
+    def get_roster_by_scoring_period(self, scoringPeriodId: int = None):
+        '''Gets roster info from past scoring periods'''
+        params = {
+            'view': ['mRoster'],
+            'scoringPeriodId': [scoringPeriodId]
+        }
+        data = self.league_get(params=params)
+        return data
+
     def get_pro_schedule(self):
         '''Gets the current sports professional team schedules'''
         params = {
@@ -66,7 +75,7 @@ class EspnFantasyRequests(object):
         }
         data = self.get(params=params)
         return data
-    
+
     def get_pro_players(self):
         '''Gets the current sports professional players'''
         params = {
@@ -115,4 +124,3 @@ class EspnFantasyRequests(object):
             "espn_s2": data['data']['s2'],
             "swid": data['data']['profile']['swid']
         }
-    
